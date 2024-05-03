@@ -9,7 +9,7 @@ client = Socrata("data.cityofnewyork.us", None)
 
 
 @st.cache_data(persist=True)
-def load_data(nrows: int) -> object:
+def load_data(nrows: int) -> pd.DataFrame:
     """Getting certain number of data rows from the source
     and formatting as necessary."""
 
@@ -38,32 +38,54 @@ def load_data(nrows: int) -> object:
 
 
 @st.cache_data(persist=True)
-def convert_to_csv(dataframe: object) -> object:
+def convert_to_csv(dataframe: pd.DataFrame) -> str:
     """Converting the dataframe to .csv to download it later"""
     return dataframe.to_csv().encode("utf-8")
 
 
+def show_raw_data() -> None:
+    st.subheader("📎Raw Data")
+    st.write(data)
+
+    csv = convert_to_csv(data_for_download)
+    st.download_button(
+        "Download data as .csv",
+        data=csv,
+        file_name="NYC_Motor_Vehicle_Collisions_2023.csv",
+        mime="text/csv",
+    )
+    st.caption("""Warning! This file is quite large and
+               may cause slowness/freezing of your editor.""")
+
+
 @st.cache_data(persist=True)
-def top_five_cases(option: str):
-    if option == "Deadliest crashes":
-        data["total_severity"] = pd.to_numeric(
-            data["number_of_persons_injured"]
-        ) + pd.to_numeric(
-            data["number_of_persons_killed"]
-        )
-        newdata = data.sort_values("total_severity", ascending=False).head(5)
-    elif option == "Contributing factors":
-        # removing "unspecified" value
-        specified = data[data.contributing_factor_vehicle_1 != "Unspecified"]
-        newdata = specified["contributing_factor_vehicle_1"].value_counts()
-        newdata = newdata.reset_index(name="count")
-    elif option == "Most dangerous streets":
-        newdata = data["on_street_name"].value_counts().head(5)
-        newdata = newdata.reset_index(name="count")
-        newdata = newdata.merge(data[["on_street_name", "latitude", "longitude"]],
-                      how="left", on="on_street_name")
-    else:
-        newdata = "Nothing to show here yet."
+def top_five_cases(option: str) -> pd.DataFrame:
+    match option:
+        case "Deadliest crashes":
+            data["total_severity"] = pd.to_numeric(
+                data["number_of_persons_injured"]
+            ) + pd.to_numeric(
+                data["number_of_persons_killed"]
+            )
+            newdata = data.sort_values("total_severity", ascending=False)
+            newdata = newdata.head(5)
+
+        case "Contributing factors":
+            # removing "unspecified" value
+            specified = data[data.contributing_factor_vehicle_1 != "Unspecified"]
+            newdata = specified["contributing_factor_vehicle_1"].value_counts()
+            newdata = newdata.reset_index(name="count")
+
+        case "Most dangerous streets":
+            newdata = data["on_street_name"].value_counts().head(5)
+            newdata = newdata.reset_index(name="count")
+            newdata = newdata.merge(data[["on_street_name",
+                                          "latitude",
+                                          "longitude"]],
+                                    how="left", on="on_street_name")
+
+        case _:
+            newdata = "Nothing to show yet."
 
     return newdata
 
@@ -132,37 +154,27 @@ option = st.selectbox(
 
 result = top_five_cases(option)
 
-if option == "Deadliest crashes":
-    fig = px.bar(result, x="on_street_name", y="total_severity")
-    st.write(fig)
-elif option == "Contributing factors":
-    result.loc[result["count"] < 2_658,
-               "contributing_factor_vehicle_1"] = "Other factors"
-    fig = px.pie(result, values="count", names="contributing_factor_vehicle_1")
-    st.write(fig)
-elif option == "Most dangerous streets":
-    fig = px.scatter_mapbox(result, lat="latitude",
-                         lon="longitude", hover_name="on_street_name",
-                         center=dict(lat=40.7300, lon=-73.9340),
-                         color="on_street_name", size="count", zoom=9,
-                         width=600, height=600)
-    fig.update_layout(mapbox_style="open-street-map")
-    st.write(fig)
-else:
-    st.write(result)
+match option:
+    case "Deadliest crashes":
+        fig = px.bar(result, x="on_street_name", y="total_severity")
+        st.write(fig)
+    case "Contributing factors":
+        result.loc[result["count"] < 2_658,
+                   "contributing_factor_vehicle_1"] = "Other factors"
+        fig = px.pie(result, values="count",
+                     names="contributing_factor_vehicle_1")
+        st.write(fig)
+    case "Most dangerous streets":
+        fig = px.scatter_mapbox(result, lat="latitude",
+                             lon="longitude", hover_name="on_street_name",
+                             center=dict(lat=40.7300, lon=-73.9340),
+                             color="on_street_name", size="count", zoom=9,
+                             width=600, height=600)
+        fig.update_layout(mapbox_style="open-street-map")
+        st.write(fig)
+    case _:
+        st.write(result)
 
 
 if st.checkbox("Show Raw Data", False):
-    st.subheader("📎Raw Data")
-    st.write(data)
-
-    csv = convert_to_csv(data_for_download)
-    st.download_button(
-        "Download data as .csv",
-        data=csv,
-        file_name="NYC_Motor_Vehicle_Collisions_2023.csv",
-        mime="text/csv",
-    )
-    st.caption("""Warning! This file is quite large and
-               may cause slowness/freezing of your editor.""")
-    
+    show_raw_data()
