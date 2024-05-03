@@ -44,16 +44,28 @@ def convert_to_csv(dataframe: object) -> object:
 
 
 @st.cache_data(persist=True)
-def top_five_cases(option):
+def top_five_cases(option: str):
     if option == "Deadliest crashes":
         data["total_severity"] = pd.to_numeric(
-            data["number_of_persons_injured"] +
+            data["number_of_persons_injured"]
+        ) + pd.to_numeric(
             data["number_of_persons_killed"]
         )
         newdata = data.sort_values("total_severity", ascending=False).head(5)
-        return newdata
+    elif option == "Contributing factors":
+        # removing "unspecified" value
+        specified = data[data.contributing_factor_vehicle_1 != "Unspecified"]
+        newdata = specified["contributing_factor_vehicle_1"].value_counts()
+        newdata = newdata.reset_index(name="count")
+    elif option == "Most dangerous streets":
+        newdata = data["on_street_name"].value_counts().head(5)
+        newdata = newdata.reset_index(name="count")
+        newdata = newdata.merge(data[["on_street_name", "latitude", "longitude"]],
+                      how="left", on="on_street_name")
     else:
-        pass
+        newdata = "Nothing to show here yet."
+
+    return newdata
 
 
 data = load_data(100_000)
@@ -63,20 +75,21 @@ st.title("New York City Motor Vehicle Collisions :collision:")
 
 # density heatmap for crash hotspots
 
-st.subheader("Crash Frequency Based on Location")
-st.markdown("""This is the :rainbow[heatmap] of New York City, showing amount of motor
-            accident activity by street.""")
+st.subheader("📍 Crash Frequency Based on Location")
+st.markdown("""This is the :rainbow[heatmap] of New York City, showing
+            amount of motor accident activity by street.""")
 
 # calculating crash counts
 
-crash_counts = data.groupby("on_street_name").size().reset_index(name="crash_counts")
+crash_counts = data.groupby("on_street_name").size()
+crash_counts = crash_counts.reset_index(name="crash_counts")
 data = data.merge(crash_counts, on="on_street_name")
 
 # drawing a heatmap
 
 fig = px.density_mapbox(data, lat='latitude', lon='longitude',
                         z="crash_counts", radius=3,
-                        center=dict(lat=40.67812, lon=-73.92165),
+                        center=dict(lat=40.68679, lon=-73.92165),
                         opacity=0.7,
                         zoom=9, mapbox_style="carto-positron",
                         color_continuous_scale="rainbow",
@@ -104,22 +117,43 @@ st.write(fig)
 
 
 #  creating top-5 cases
-st.subheader("Top-5 of the most extreme cases. I want to see:")
+st.subheader("📃 Top-5 of the most extreme cases")
+st.markdown("#### I want to see:")
 option = st.selectbox(
     "Top-5",
     index=None,
     options=[
         "Deadliest crashes",
-        "Contibuting factors",
+        "Contributing factors",
         "Most dangerous streets"
     ],
     label_visibility="collapsed"
 )
 
-st.write(top_five_cases(option))
+result = top_five_cases(option)
+
+if option == "Deadliest crashes":
+    fig = px.bar(result, x="on_street_name", y="total_severity")
+    st.write(fig)
+elif option == "Contributing factors":
+    result.loc[result["count"] < 2_658,
+               "contributing_factor_vehicle_1"] = "Other factors"
+    fig = px.pie(result, values="count", names="contributing_factor_vehicle_1")
+    st.write(fig)
+elif option == "Most dangerous streets":
+    fig = px.scatter_mapbox(result, lat="latitude",
+                         lon="longitude", hover_name="on_street_name",
+                         center=dict(lat=40.7300, lon=-73.9340),
+                         color="on_street_name", size="count", zoom=9,
+                         width=600, height=600)
+    fig.update_layout(mapbox_style="open-street-map")
+    st.write(fig)
+else:
+    st.write(result)
+
 
 if st.checkbox("Show Raw Data", False):
-    st.subheader("Raw Data")
+    st.subheader("📎Raw Data")
     st.write(data)
 
     csv = convert_to_csv(data_for_download)
@@ -130,4 +164,5 @@ if st.checkbox("Show Raw Data", False):
         mime="text/csv",
     )
     st.caption("""Warning! This file is quite large and
-               may cause slowness/freezes of your editor.""")
+               may cause slowness/freezing of your editor.""")
+    
