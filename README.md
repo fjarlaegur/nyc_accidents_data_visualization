@@ -6,3 +6,4 @@ Libraries used:
 - plotly
 
 Dashboard: https://nyc-accidents-visualisation.streamlit.app/
+### If you see "This app has gone to sleep due to inactivity" message, please click the "Yes, get this app back up!" button.

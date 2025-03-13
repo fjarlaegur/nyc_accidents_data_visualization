@@ -98,7 +98,7 @@ st.title("New York City Motor Vehicle Collisions :collision:")
 # density heatmap for crash hotspots
 
 st.subheader("📍 Crash Frequency Based on Location")
-st.markdown("""This is the :rainbow[heatmap] of New York City, showing
+st.markdown("""This is a :rainbow[heatmap] of New York City, showing the
             amount of motor accident activity by street.""")
 
 # calculating crash counts
